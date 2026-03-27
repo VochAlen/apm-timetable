@@ -379,7 +379,7 @@ const translations = {
     periodLabel: "Period",
     dataFormat: "Format podataka",
     csvFile: "CSV fajl (Stari format)",
-    newCsvFile: "CSV fajl (Novi format)",
+    newCsvFile: "CSV fajl (NIKO format)",
     jsonFile: "JSON unos",
     departures: "Polasci",
     arrivals: "Dolasci",
@@ -423,7 +423,7 @@ const translations = {
     periodLabel: "Period",
     dataFormat: "Format podataka",
     csvFile: "CSV fajl (Stari format)",
-    newCsvFile: "CSV fajl (Novi format)",
+    newCsvFile: "CSV fajl (NIKO format)",
     jsonFile: "JSON unos",
     departures: "Polasci",
     arrivals: "Dolasci",
@@ -737,7 +737,7 @@ export default function Home() {
     if (file && file.name.endsWith('.csv')) {
       handleNewDepartureFileChange(file);
     } else {
-      setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za polaske (novi format)" });
+      setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za polaske (NIKO format)" });
     }
   };
 
