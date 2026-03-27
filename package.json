@@ -1,0 +1,18 @@
+{
+  "name": "tivat-timetable-pdf",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "14.2.3",
+    "react": "^18",
+    "react-dom": "^18",
+    "papaparse": "^5.4.1",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2"
+  }
+}
