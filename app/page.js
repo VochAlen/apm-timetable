@@ -395,7 +395,7 @@ const translations = {
     error: "Greška",
     success: "Uspješno",
     noData: "Nema prepoznatljivih podataka",
-    disclaimer: "Red letenja prikazuje planirane podatke. Sva vremena su lokalna. Aviokompanije zadržavaju pravo izmjena. Preporučujemo provjeru informacija sa aviokompanijama. Made by Alen, 2026",
+    disclaimer: "Red letenja prikazuje planirane podatke. Sva vremena su lokalna. Aviokompanije zadržavaju pravo izmjena. Preporučujemo provjeru informacija sa aviokompanijama. Made by Alen, Tivat Airport 2026",
     search: "Pretraži destinacije...",
     history: "Historija",
     sendEmail: "Pošalji na email",
