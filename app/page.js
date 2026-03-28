@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { parseTimetableCSV, parseTimetableJSON } from "../lib/csvParser";
 import { parseArrivalsNewCSV, parseDeparturesNewCSV } from "../lib/csvParserNew";
-import { generateTimetablePDF, downloadPDF } from "../lib/pdfGenerator";
+import { generateTimetablePDF, generateSummaryPDF, downloadPDF } from "../lib/pdfGenerator";
 
 // ── Stil konstante ────────────────────────────────────────────────────────────
 const styles = {
@@ -252,7 +252,6 @@ const styles = {
   },
 };
 
-// Dark mode stilovi - samo za karticu i elemente unutar nje
 const darkStyles = {
   card: {
     background: "#1e2a36",
@@ -319,7 +318,6 @@ const TAB_CSV = "csv";
 const TAB_NEW_CSV = "newcsv";
 const TAB_JSON = "json";
 
-// Tekstovi za različite jezike
 const translations = {
   en: {
     title: "Airport Timetable",
@@ -395,7 +393,7 @@ const translations = {
     error: "Greška",
     success: "Uspješno",
     noData: "Nema prepoznatljivih podataka",
-    disclaimer: "Red letenja prikazuje planirane podatke. Sva vremena su lokalna. Aviokompanije zadržavaju pravo izmjena. Preporučujemo provjeru informacija sa aviokompanijama. Made by Alen, Tivat Airport 2026",
+    disclaimer: "Red letenja prikazuje planirane podatke. Sva vremena su lokalna. Aviokompanije zadržavaju pravo izmjena. Preporučujemo provjeru informacija sa aviokompanijama. Made by Alen, 2026",
     search: "Pretraži destinacije...",
     history: "Historija",
     sendEmail: "Pošalji na email",
@@ -455,28 +453,49 @@ const translations = {
   },
 };
 
+// ── Summary dugme komponenta (reusable) ──────────────────────────────────────
+function SummaryButton({ onClick, loading }) {
+  return (
+    <div style={{ marginTop: "8px" }}>
+      <button
+        style={{
+          width: "100%",
+          padding: "14px",
+          background: "linear-gradient(90deg, #0099cc, #00ccff)",
+          color: "white",
+          border: "none",
+          borderRadius: "10px",
+          fontSize: "15px",
+          fontWeight: 700,
+          cursor: loading ? "not-allowed" : "pointer",
+          opacity: loading ? 0.6 : 1,
+        }}
+        onClick={onClick}
+        disabled={loading}
+      >
+        🗂 Generiši Summary PDF
+      </button>
+    </div>
+  );
+}
+
 export default function Home() {
   const [lang, setLang] = useState("me");
   const t = translations[lang];
 
-  // Dark mode
   const [darkMode, setDarkMode] = useState(false);
 
-  // Konfiguracija aerodroma
   const [airportName, setAirportName] = useState("Tivat");
   const [airportIATA, setAirportIATA] = useState("TIV");
   const [airportICAO, setAirportICAO] = useState("LYTV");
   const [arrivalsSubtitle, setArrivalsSubtitle] = useState("Dolasci na aerodrom");
   const [departuresSubtitle, setDeparturesSubtitle] = useState("Polasci sa aerodroma");
 
-  // Sezona
   const [season, setSeason] = useState("S26 – Summer 2026");
   const [period, setPeriod] = useState("30 MAR 2026 – 24 OCT 2026");
 
-  // Tab
   const [tab, setTab] = useState(TAB_CSV);
 
-  // Old CSV state
   const [depFile, setDepFile] = useState(null);
   const [arrFile, setArrFile] = useState(null);
   const [depPreview, setDepPreview] = useState(null);
@@ -484,7 +503,6 @@ export default function Home() {
   const [depSearch, setDepSearch] = useState("");
   const [arrSearch, setArrSearch] = useState("");
 
-  // New CSV state
   const [newDepFile, setNewDepFile] = useState(null);
   const [newArrFile, setNewArrFile] = useState(null);
   const [newDepPreview, setNewDepPreview] = useState(null);
@@ -492,18 +510,15 @@ export default function Home() {
   const [newDepSearch, setNewDepSearch] = useState("");
   const [newArrSearch, setNewArrSearch] = useState("");
 
-  // JSON state
   const [jsonText, setJsonText] = useState("");
   const [jsonFile, setJsonFile] = useState(null);
   const [jsonDocType, setJsonDocType] = useState("departures");
   const [jsonPreview, setJsonPreview] = useState(null);
   const [jsonSearch, setJsonSearch] = useState("");
 
-  // History
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
-  // Email dialog
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [email, setEmail] = useState("");
   const [currentPdfData, setCurrentPdfData] = useState(null);
@@ -511,31 +526,21 @@ export default function Home() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Drag & drop state for old CSV
   const [depDragOver, setDepDragOver] = useState(false);
   const [arrDragOver, setArrDragOver] = useState(false);
-  
-  // Drag & drop state for new CSV
   const [newDepDragOver, setNewDepDragOver] = useState(false);
   const [newArrDragOver, setNewArrDragOver] = useState(false);
-  
-  // Separate refs for each file input
+
   const depFileInputRef = useRef(null);
   const arrFileInputRef = useRef(null);
   const newDepFileInputRef = useRef(null);
   const newArrFileInputRef = useRef(null);
 
-  // Učitaj history i dark mode iz localStorage
   useEffect(() => {
     const savedHistory = localStorage.getItem("tivat_pdf_history");
-    if (savedHistory) {
-      setHistory(JSON.parse(savedHistory));
-    }
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
     const savedDarkMode = localStorage.getItem("tivat_dark_mode");
-    if (savedDarkMode) {
-      setDarkMode(JSON.parse(savedDarkMode));
-    }
-    // Učitaj sačuvanu konfiguraciju aerodroma
+    if (savedDarkMode) setDarkMode(JSON.parse(savedDarkMode));
     const savedAirportConfig = localStorage.getItem("airport_config");
     if (savedAirportConfig) {
       const config = JSON.parse(savedAirportConfig);
@@ -547,56 +552,32 @@ export default function Home() {
     }
   }, []);
 
-  // Sačuvaj konfiguraciju aerodroma
   const saveAirportConfig = () => {
-    const config = {
-      name: airportName,
-      iata: airportIATA,
-      icao: airportICAO,
-      arrivalsSubtitle: arrivalsSubtitle,
-      departuresSubtitle: departuresSubtitle,
-    };
+    const config = { name: airportName, iata: airportIATA, icao: airportICAO, arrivalsSubtitle, departuresSubtitle };
     localStorage.setItem("airport_config", JSON.stringify(config));
     setStatus({ type: "ok", msg: "Konfiguracija aerodroma sačuvana" });
   };
 
-  // Sačuvaj generisani PDF u history
   const saveToHistory = (filename, type, destinations, data) => {
     const newEntry = {
-      id: Date.now(),
-      filename,
-      type,
-      destinations,
-      date: new Date().toLocaleString(),
-      season,
-      period,
-      airportConfig: {
-        name: airportName,
-        iata: airportIATA,
-        icao: airportICAO,
-        arrivalsSubtitle: arrivalsSubtitle,
-        departuresSubtitle: departuresSubtitle,
-      },
-      data: data,
+      id: Date.now(), filename, type, destinations,
+      date: new Date().toLocaleString(), season, period,
+      airportConfig: { name: airportName, iata: airportIATA, icao: airportICAO, arrivalsSubtitle, departuresSubtitle },
+      data,
     };
     const newHistory = [newEntry, ...history].slice(0, 20);
     setHistory(newHistory);
     localStorage.setItem("tivat_pdf_history", JSON.stringify(newHistory));
   };
 
-  // Helper za generisanje PDF-a sa trenutnom konfiguracijom aerodroma
   const generateAndDownloadPDF = (grouped, type, filename) => {
     const airportConfig = {
-      name: airportName,
-      iata: airportIATA,
-      icao: airportICAO,
+      name: airportName, iata: airportIATA, icao: airportICAO,
       subtitle: type === "arrivals" ? arrivalsSubtitle : departuresSubtitle,
     };
     const pdf = generateTimetablePDF(grouped, type, season, period, airportConfig);
     downloadPDF(pdf, filename);
   };
-
-  // ── Helpers ──────────────────────────────────────────────────────────────────
 
   function readFileText(file) {
     return new Promise((resolve, reject) => {
@@ -607,171 +588,95 @@ export default function Home() {
     });
   }
 
-  // Old CSV preview
   async function previewOldCSV(file) {
     if (!file) return null;
     try {
       const text = await readFileText(file);
-      const grouped = parseTimetableCSV(text);
-      return grouped;
-    } catch (err) {
-      return null;
-    }
+      return parseTimetableCSV(text);
+    } catch { return null; }
   }
 
-  // New CSV preview
   async function previewNewCSV(file, isArrivals) {
     if (!file) return null;
     try {
       const text = await readFileText(file);
-      const grouped = isArrivals ? parseArrivalsNewCSV(text) : parseDeparturesNewCSV(text);
-      return grouped;
-    } catch (err) {
-      console.error("Preview error:", err);
-      return null;
-    }
+      return isArrivals ? parseArrivalsNewCSV(text) : parseDeparturesNewCSV(text);
+    } catch (err) { console.error("Preview error:", err); return null; }
   }
 
-  // Old CSV handlers
   async function handleDepartureFileChange(file) {
     setDepFile(file);
-    const preview = await previewOldCSV(file);
-    setDepPreview(preview);
+    setDepPreview(await previewOldCSV(file));
   }
 
   async function handleArrivalFileChange(file) {
     setArrFile(file);
-    const preview = await previewOldCSV(file);
-    setArrPreview(preview);
+    setArrPreview(await previewOldCSV(file));
   }
 
-  // New CSV handlers
   async function handleNewDepartureFileChange(file) {
     setNewDepFile(file);
-    const preview = await previewNewCSV(file, false);
-    setNewDepPreview(preview);
+    setNewDepPreview(await previewNewCSV(file, false));
   }
 
   async function handleNewArrivalFileChange(file) {
     setNewArrFile(file);
-    const preview = await previewNewCSV(file, true);
-    setNewArrPreview(preview);
+    setNewArrPreview(await previewNewCSV(file, true));
   }
 
-  // JSON preview
   async function handleJSONPreview() {
     try {
       let input = jsonText.trim();
-      if (jsonFile) {
-        input = await readFileText(jsonFile);
-      }
-      if (!input) {
-        setJsonPreview(null);
-        return;
-      }
-      const grouped = parseTimetableJSON(input);
-      setJsonPreview(grouped);
-    } catch (err) {
-      setJsonPreview(null);
-    }
+      if (jsonFile) input = await readFileText(jsonFile);
+      if (!input) { setJsonPreview(null); return; }
+      setJsonPreview(parseTimetableJSON(input));
+    } catch { setJsonPreview(null); }
   }
 
-  // Drag & drop handlers for old CSV
-  const handleDepDragOver = (e) => {
-    e.preventDefault();
-    setDepDragOver(true);
-  };
-
-  const handleDepDragLeave = (e) => {
-    e.preventDefault();
-    setDepDragOver(false);
-  };
-
+  // Drag & drop - old CSV
+  const handleDepDragOver = (e) => { e.preventDefault(); setDepDragOver(true); };
+  const handleDepDragLeave = (e) => { e.preventDefault(); setDepDragOver(false); };
   const handleDepDrop = (e) => {
-    e.preventDefault();
-    setDepDragOver(false);
+    e.preventDefault(); setDepDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.csv')) {
-      handleDepartureFileChange(file);
-    } else {
-      setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za polaske" });
-    }
+    if (file?.name.endsWith('.csv')) handleDepartureFileChange(file);
+    else setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za polaske" });
   };
 
-  const handleArrDragOver = (e) => {
-    e.preventDefault();
-    setArrDragOver(true);
-  };
-
-  const handleArrDragLeave = (e) => {
-    e.preventDefault();
-    setArrDragOver(false);
-  };
-
+  const handleArrDragOver = (e) => { e.preventDefault(); setArrDragOver(true); };
+  const handleArrDragLeave = (e) => { e.preventDefault(); setArrDragOver(false); };
   const handleArrDrop = (e) => {
-    e.preventDefault();
-    setArrDragOver(false);
+    e.preventDefault(); setArrDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.csv')) {
-      handleArrivalFileChange(file);
-    } else {
-      setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za dolaske" });
-    }
+    if (file?.name.endsWith('.csv')) handleArrivalFileChange(file);
+    else setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za dolaske" });
   };
 
-  // Drag & drop handlers for new CSV
-  const handleNewDepDragOver = (e) => {
-    e.preventDefault();
-    setNewDepDragOver(true);
-  };
-
-  const handleNewDepDragLeave = (e) => {
-    e.preventDefault();
-    setNewDepDragOver(false);
-  };
-
+  // Drag & drop - new CSV
+  const handleNewDepDragOver = (e) => { e.preventDefault(); setNewDepDragOver(true); };
+  const handleNewDepDragLeave = (e) => { e.preventDefault(); setNewDepDragOver(false); };
   const handleNewDepDrop = (e) => {
-    e.preventDefault();
-    setNewDepDragOver(false);
+    e.preventDefault(); setNewDepDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.csv')) {
-      handleNewDepartureFileChange(file);
-    } else {
-      setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za polaske (NIKO format)" });
-    }
+    if (file?.name.endsWith('.csv')) handleNewDepartureFileChange(file);
+    else setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za polaske (NIKO format)" });
   };
 
-  const handleNewArrDragOver = (e) => {
-    e.preventDefault();
-    setNewArrDragOver(true);
-  };
-
-  const handleNewArrDragLeave = (e) => {
-    e.preventDefault();
-    setNewArrDragOver(false);
-  };
-
+  const handleNewArrDragOver = (e) => { e.preventDefault(); setNewArrDragOver(true); };
+  const handleNewArrDragLeave = (e) => { e.preventDefault(); setNewArrDragOver(false); };
   const handleNewArrDrop = (e) => {
-    e.preventDefault();
-    setNewArrDragOver(false);
+    e.preventDefault(); setNewArrDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.csv')) {
-      handleNewArrivalFileChange(file);
-    } else {
-      setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za dolaske (novi format)" });
-    }
+    if (file?.name.endsWith('.csv')) handleNewArrivalFileChange(file);
+    else setStatus({ type: "err", msg: "Molimo učitajte CSV fajl za dolaske (NIKO format)" });
   };
 
   // ── Old CSV handlers ─────────────────────────────────────────────────────────
 
   async function handleOldCSVGenerate(type) {
     const file = type === "arrivals" ? arrFile : depFile;
-    if (!file) {
-      setStatus({ type: "err", msg: `${t.uploadCSV} ${type === "arrivals" ? t.arrivals : t.departures}` });
-      return;
-    }
-    setLoading(true);
-    setStatus({ type: "info", msg: t.loading });
+    if (!file) { setStatus({ type: "err", msg: `${t.uploadCSV} ${type === "arrivals" ? t.arrivals : t.departures}` }); return; }
+    setLoading(true); setStatus({ type: "info", msg: t.loading });
     try {
       const text = await readFileText(file);
       const grouped = parseTimetableCSV(text);
@@ -783,23 +688,14 @@ export default function Home() {
       setStatus({ type: "ok", msg: `✓ ${filename} (${grouped.length} ${t.destinations})` });
     } catch (err) {
       setStatus({ type: "err", msg: `${t.error}: ${err.message}` });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   async function handleOldCSVBoth() {
-    if (!depFile || !arrFile) {
-      setStatus({ type: "err", msg: `${t.uploadCSV} ${t.departures} i ${t.arrivals}` });
-      return;
-    }
-    setLoading(true);
-    setStatus({ type: "info", msg: t.loading });
+    if (!depFile || !arrFile) { setStatus({ type: "err", msg: `${t.uploadCSV} ${t.departures} i ${t.arrivals}` }); return; }
+    setLoading(true); setStatus({ type: "info", msg: t.loading });
     try {
-      const [arrText, depText] = await Promise.all([
-        readFileText(arrFile),
-        readFileText(depFile),
-      ]);
+      const [arrText, depText] = await Promise.all([readFileText(arrFile), readFileText(depFile)]);
       const arrGrouped = parseTimetableCSV(arrText);
       const depGrouped = parseTimetableCSV(depText);
       generateAndDownloadPDF(arrGrouped, "arrivals", "arrivals.pdf");
@@ -809,9 +705,7 @@ export default function Home() {
       setStatus({ type: "ok", msg: `✓ arrivals.pdf (${arrGrouped.length}) i departures.pdf (${depGrouped.length}) ${t.destinations}` });
     } catch (err) {
       setStatus({ type: "err", msg: `${t.error}: ${err.message}` });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   // ── New CSV handlers ─────────────────────────────────────────────────────────
@@ -819,12 +713,8 @@ export default function Home() {
   async function handleNewCSVGenerate(type) {
     const file = type === "arrivals" ? newArrFile : newDepFile;
     const parser = type === "arrivals" ? parseArrivalsNewCSV : parseDeparturesNewCSV;
-    if (!file) {
-      setStatus({ type: "err", msg: `${t.uploadCSV} ${type === "arrivals" ? t.arrivals : t.departures} (novi format)` });
-      return;
-    }
-    setLoading(true);
-    setStatus({ type: "info", msg: t.loading });
+    if (!file) { setStatus({ type: "err", msg: `${t.uploadCSV} ${type === "arrivals" ? t.arrivals : t.departures} (NIKO format)` }); return; }
+    setLoading(true); setStatus({ type: "info", msg: t.loading });
     try {
       const text = await readFileText(file);
       const grouped = parser(text);
@@ -836,23 +726,14 @@ export default function Home() {
       setStatus({ type: "ok", msg: `✓ ${filename} (${grouped.length} ${t.destinations})` });
     } catch (err) {
       setStatus({ type: "err", msg: `${t.error}: ${err.message}` });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   async function handleNewCSVBoth() {
-    if (!newDepFile || !newArrFile) {
-      setStatus({ type: "err", msg: `${t.uploadCSV} ${t.departures} i ${t.arrivals} (novi format)` });
-      return;
-    }
-    setLoading(true);
-    setStatus({ type: "info", msg: t.loading });
+    if (!newDepFile || !newArrFile) { setStatus({ type: "err", msg: `${t.uploadCSV} ${t.departures} i ${t.arrivals} (NIKO format)` }); return; }
+    setLoading(true); setStatus({ type: "info", msg: t.loading });
     try {
-      const [arrText, depText] = await Promise.all([
-        readFileText(newArrFile),
-        readFileText(newDepFile),
-      ]);
+      const [arrText, depText] = await Promise.all([readFileText(newArrFile), readFileText(newDepFile)]);
       const arrGrouped = parseArrivalsNewCSV(arrText);
       const depGrouped = parseDeparturesNewCSV(depText);
       generateAndDownloadPDF(arrGrouped, "arrivals", "arrivals.pdf");
@@ -862,26 +743,49 @@ export default function Home() {
       setStatus({ type: "ok", msg: `✓ arrivals.pdf (${arrGrouped.length}) i departures.pdf (${depGrouped.length}) ${t.destinations}` });
     } catch (err) {
       setStatus({ type: "err", msg: `${t.error}: ${err.message}` });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
-  // ── JSON handlers ─────────────────────────────────────────────────────────────
+  // ── Summary PDF handler ──────────────────────────────────────────────────────
+
+  async function handleSummaryPDF() {
+    const allGrouped = [];
+    if (tab === TAB_CSV) {
+      if (depFile) allGrouped.push(parseTimetableCSV(await readFileText(depFile)));
+      if (arrFile) allGrouped.push(parseTimetableCSV(await readFileText(arrFile)));
+    } else if (tab === TAB_NEW_CSV) {
+      if (newDepFile) allGrouped.push(parseDeparturesNewCSV(await readFileText(newDepFile)));
+      if (newArrFile) allGrouped.push(parseArrivalsNewCSV(await readFileText(newArrFile)));
+    } else if (tab === TAB_JSON) {
+      let input = jsonText.trim();
+      if (jsonFile) input = await readFileText(jsonFile);
+      if (input) allGrouped.push(parseTimetableJSON(input));
+    }
+    if (!allGrouped.length || allGrouped.every(g => !g.length)) {
+      setStatus({ type: "err", msg: "Učitaj bar jedan fajl za summary PDF" });
+      return;
+    }
+    setLoading(true);
+    setStatus({ type: "info", msg: "Generišem summary PDF..." });
+    try {
+      const pdf = generateSummaryPDF(allGrouped, season, period, { name: airportName, iata: airportIATA, icao: airportICAO });
+      downloadPDF(pdf, "summary-flight-schedule.pdf");
+      setStatus({ type: "ok", msg: "✓ summary-flight-schedule.pdf preuzet" });
+    } catch (err) {
+      setStatus({ type: "err", msg: `Greška: ${err.message}` });
+    } finally { setLoading(false); }
+  }
+
+  // ── JSON handler ─────────────────────────────────────────────────────────────
 
   async function handleJSONGenerate() {
-    setLoading(true);
-    setStatus({ type: "info", msg: t.loading });
+    setLoading(true); setStatus({ type: "info", msg: t.loading });
     try {
       let input = jsonText.trim();
-      if (jsonFile) {
-        input = await readFileText(jsonFile);
-      }
+      if (jsonFile) input = await readFileText(jsonFile);
       if (!input) throw new Error(t.noData);
-
       const grouped = parseTimetableJSON(input);
       if (!grouped.length) throw new Error(t.noData);
-
       const filename = jsonDocType === "arrivals" ? "arrivals.pdf" : "departures.pdf";
       generateAndDownloadPDF(grouped, jsonDocType, filename);
       saveToHistory(filename, jsonDocType, grouped.length, grouped);
@@ -889,155 +793,90 @@ export default function Home() {
       setStatus({ type: "ok", msg: `✓ ${filename} (${grouped.length} ${t.destinations})` });
     } catch (err) {
       setStatus({ type: "err", msg: `${t.error}: ${err.message}` });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
   // ── Email handler ────────────────────────────────────────────────────────────
 
   const sendEmail = async () => {
     if (!email || !currentPdfData) return;
-    
     setStatus({ type: "info", msg: "Šaljem email..." });
     try {
       await new Promise(resolve => setTimeout(resolve, 1500));
       setStatus({ type: "ok", msg: `✓ PDF poslat na ${email}` });
       setShowEmailDialog(false);
       setEmail("");
-    } catch (err) {
-      setStatus({ type: "err", msg: "Greška pri slanju email-a" });
-    }
+    } catch { setStatus({ type: "err", msg: "Greška pri slanju email-a" }); }
   };
 
-  // ── Export handlers ──────────────────────────────────────────────────────────
+  // ── Export handler ───────────────────────────────────────────────────────────
 
   const exportToJSON = (data, type) => {
     if (!data) return;
-    const dataStr = JSON.stringify(data, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = `${type}_data.json`;
-    a.click();
+    a.href = url; a.download = `${type}_data.json`; a.click();
     URL.revokeObjectURL(url);
     setStatus({ type: "ok", msg: "JSON fajl preuzet" });
   };
 
-  // Helper za kombinovanje stilova
-  const getCardStyle = () => ({
-    ...styles.card,
-    ...(darkMode ? darkStyles.card : {})
-  });
+  // ── Style helpers ────────────────────────────────────────────────────────────
 
-  const getLabelStyle = () => ({
-    ...styles.label,
-    ...(darkMode ? darkStyles.label : {})
-  });
-
-  const getInputStyle = () => ({
-    ...styles.input,
-    ...(darkMode ? darkStyles.input : {})
-  });
-
+  const getCardStyle = () => ({ ...styles.card, ...(darkMode ? darkStyles.card : {}) });
+  const getLabelStyle = () => ({ ...styles.label, ...(darkMode ? darkStyles.label : {}) });
+  const getInputStyle = () => ({ ...styles.input, ...(darkMode ? darkStyles.input : {}) });
   const getFileInputStyle = (isDragOver) => ({
     ...styles.fileInput,
     ...(darkMode ? darkStyles.fileInput : {}),
-    ...(isDragOver ? styles.fileInputDragOver : {})
+    ...(isDragOver ? styles.fileInputDragOver : {}),
   });
-
-  const getSectionTitleStyle = () => ({
-    ...styles.sectionTitle,
-    ...(darkMode ? darkStyles.sectionTitle : {})
-  });
-
-  const getTipStyle = () => ({
-    ...styles.tip,
-    ...(darkMode ? darkStyles.tip : {})
-  });
-
-  const getPreviewStyle = () => ({
-    ...styles.preview,
-    ...(darkMode ? darkStyles.preview : {})
-  });
-
-  const getPreviewTitleStyle = () => ({
-    ...styles.previewTitle,
-    ...(darkMode ? darkStyles.previewTitle : {})
-  });
-
-  const getPreviewItemStyle = () => ({
-    ...styles.previewItem,
-    ...(darkMode ? darkStyles.previewItem : {})
-  });
-
-  const getBtnSecondaryStyle = () => ({
-    ...styles.btnSecondary,
-    ...(darkMode ? darkStyles.btnSecondary : {})
-  });
+  const getSectionTitleStyle = () => ({ ...styles.sectionTitle, ...(darkMode ? darkStyles.sectionTitle : {}) });
+  const getTipStyle = () => ({ ...styles.tip, ...(darkMode ? darkStyles.tip : {}) });
+  const getPreviewStyle = () => ({ ...styles.preview, ...(darkMode ? darkStyles.preview : {}) });
+  const getPreviewTitleStyle = () => ({ ...styles.previewTitle, ...(darkMode ? darkStyles.previewTitle : {}) });
+  const getPreviewItemStyle = () => ({ ...styles.previewItem, ...(darkMode ? darkStyles.previewItem : {}) });
+  const getBtnSecondaryStyle = () => ({ ...styles.btnSecondary, ...(darkMode ? darkStyles.btnSecondary : {}) });
+  const getModalContentStyle = () => ({ ...styles.modalContent, ...(darkMode ? darkStyles.modalContent : {}) });
 
   const getStatusStyle = () => {
-    const base = {
-      ...styles.status,
-      ...(darkMode ? darkStyles.status : {})
-    };
+    const base = { ...styles.status, ...(darkMode ? darkStyles.status : {}) };
     if (status?.type === "ok") return { ...base, ...styles.statusOk, ...(darkMode ? darkStyles.statusOk : {}) };
     if (status?.type === "err") return { ...base, ...styles.statusErr, ...(darkMode ? darkStyles.statusErr : {}) };
     return { ...base, ...styles.statusInfo, ...(darkMode ? darkStyles.statusInfo : {}) };
   };
 
-  const getModalContentStyle = () => ({
-    ...styles.modalContent,
-    ...(darkMode ? darkStyles.modalContent : {})
-  });
+  // ── Sub-komponente ───────────────────────────────────────────────────────────
 
-  // Preview komponenta
   const PreviewSection = ({ data, title, searchTerm, setSearchTerm, showExport = false, type = "" }) => {
     if (!data || data.length === 0) return null;
-    
-    const filteredData = searchTerm 
-      ? data.filter(d => 
+    const filteredData = searchTerm
+      ? data.filter(d =>
           d.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           d.country?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           d.airportCode?.toLowerCase().includes(searchTerm.toLowerCase())
         )
       : data;
-    
     const totalFlights = data.reduce((sum, d) => sum + d.flights.length, 0);
-    
     return (
       <div style={getPreviewStyle()}>
         <div style={getPreviewTitleStyle()}>
           {title} <span style={styles.badge}>{data.length} {t.destinations} / {totalFlights} {t.flights}</span>
         </div>
-        <input
-          type="text"
-          placeholder={t.search}
-          style={getInputStyle()}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        <input type="text" placeholder={t.search} style={getInputStyle()} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         <ul style={styles.previewList}>
           {filteredData.slice(0, 10).map((dest, idx) => (
             <li key={idx} style={getPreviewItemStyle()}>
-              <span>
-                <strong>{dest.airportCode}</strong> {dest.city}, {dest.country}
-              </span>
+              <span><strong>{dest.airportCode}</strong> {dest.city}, {dest.country}</span>
               <span style={{ color: darkMode ? "#00b4d8" : "#0077b6" }}>{dest.flights.length} {t.flights}</span>
             </li>
           ))}
           {filteredData.length > 10 && (
-            <li style={getPreviewItemStyle()}>
-              + {filteredData.length - 10} {t.more} {t.destinations}
-            </li>
+            <li style={getPreviewItemStyle()}>+ {filteredData.length - 10} {t.more} {t.destinations}</li>
           )}
         </ul>
         {showExport && data && (
-          <button
-            style={getBtnSecondaryStyle()}
-            onClick={() => exportToJSON(data, type)}
-          >
+          <button style={getBtnSecondaryStyle()} onClick={() => exportToJSON(data, type)}>
             📥 {t.export} JSON
           </button>
         )}
@@ -1045,20 +884,13 @@ export default function Home() {
     );
   };
 
-  // History panel komponenta
   const HistoryPanel = () => {
     if (!showHistory) return null;
-    
     return (
       <div style={getCardStyle()}>
         <h2 style={getSectionTitleStyle()}>
           📜 {t.history}
-          <button 
-            style={getBtnSecondaryStyle()}
-            onClick={() => setShowHistory(false)}
-          >
-            {t.close}
-          </button>
+          <button style={getBtnSecondaryStyle()} onClick={() => setShowHistory(false)}>{t.close}</button>
         </h2>
         {history.length === 0 ? (
           <p style={getTipStyle()}>{t.noHistory}</p>
@@ -1068,29 +900,17 @@ export default function Home() {
               <li key={item.id} style={getPreviewItemStyle()}>
                 <div>
                   <strong>{item.filename}</strong>
-                  <div style={{ fontSize: "11px", color: "#6b7a99" }}>
-                    {item.date} • {item.destinations} {t.destinations}
-                  </div>
+                  <div style={{ fontSize: "11px", color: "#6b7a99" }}>{item.date} • {item.destinations} {t.destinations}</div>
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button 
-                    style={getBtnSecondaryStyle()}
-                    onClick={() => {
-                      if (item.data) {
-                        const airportConfig = item.airportConfig || {
-                          name: airportName,
-                          iata: airportIATA,
-                          icao: airportICAO,
-                          subtitle: item.type === "arrivals" ? arrivalsSubtitle : departuresSubtitle,
-                        };
-                        const pdf = generateTimetablePDF(item.data, item.type, item.season, item.period, airportConfig);
-                        downloadPDF(pdf, item.filename);
-                        setStatus({ type: "ok", msg: `✓ ${item.filename} regenerisan` });
-                      }
-                    }}
-                  >
-                    🔄 {t.repeat}
-                  </button>
+                  <button style={getBtnSecondaryStyle()} onClick={() => {
+                    if (item.data) {
+                      const airportConfig = item.airportConfig || { name: airportName, iata: airportIATA, icao: airportICAO, subtitle: item.type === "arrivals" ? arrivalsSubtitle : departuresSubtitle };
+                      const pdf = generateTimetablePDF(item.data, item.type, item.season, item.period, airportConfig);
+                      downloadPDF(pdf, item.filename);
+                      setStatus({ type: "ok", msg: `✓ ${item.filename} regenerisan` });
+                    }
+                  }}>🔄 {t.repeat}</button>
                 </div>
               </li>
             ))}
@@ -1100,53 +920,31 @@ export default function Home() {
     );
   };
 
-  // Email dialog komponenta
   const EmailDialog = () => {
     if (!showEmailDialog) return null;
-    
     return (
       <div style={styles.modal}>
         <div style={getModalContentStyle()}>
           <h2 style={getSectionTitleStyle()}>📧 {t.sendEmail}</h2>
           <label style={getLabelStyle()}>Email adresa</label>
-          <input
-            style={getInputStyle()}
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder={t.emailPlaceholder}
-          />
+          <input style={getInputStyle()} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.emailPlaceholder} />
           <div style={{ ...styles.row, marginTop: "16px" }}>
-            <button
-              style={getBtnSecondaryStyle()}
-              onClick={() => setShowEmailDialog(false)}
-            >
-              {t.cancel}
-            </button>
-            <button
-              style={{ ...styles.btnArrivals, margin: 0 }}
-              onClick={sendEmail}
-            >
-              {t.send}
-            </button>
+            <button style={getBtnSecondaryStyle()} onClick={() => setShowEmailDialog(false)}>{t.cancel}</button>
+            <button style={{ ...styles.btnArrivals, margin: 0 }} onClick={sendEmail}>{t.send}</button>
           </div>
         </div>
       </div>
     );
   };
 
-  const tabBtn = (t) => ({
-    flex: 1,
-    padding: "10px",
-    border: "none",
-    borderRadius: "8px",
-    fontWeight: 700,
-    fontSize: "14px",
-    cursor: "pointer",
-    transition: "all .15s",
-    background: tab === t ? "#00467f" : (darkMode ? "#2a3a48" : "#e8f0fe"),
-    color: tab === t ? "white" : (darkMode ? "#00b4d8" : "#00467f"),
+  const tabBtn = (tabId) => ({
+    flex: 1, padding: "10px", border: "none", borderRadius: "8px",
+    fontWeight: 700, fontSize: "14px", cursor: "pointer", transition: "all .15s",
+    background: tab === tabId ? "#00467f" : (darkMode ? "#2a3a48" : "#e8f0fe"),
+    color: tab === tabId ? "white" : (darkMode ? "#00b4d8" : "#00467f"),
   });
+
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div style={styles.page}>
@@ -1154,100 +952,54 @@ export default function Home() {
         <div style={styles.languageSwitcher}>
           <button
             style={{ ...styles.langBtn, background: darkMode ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.2)" }}
-            onClick={() => {
-              setDarkMode(!darkMode);
-              localStorage.setItem("tivat_dark_mode", JSON.stringify(!darkMode));
-            }}
+            onClick={() => { setDarkMode(!darkMode); localStorage.setItem("tivat_dark_mode", JSON.stringify(!darkMode)); }}
           >
             {darkMode ? "☀️" : "🌙"}
           </button>
-          <button
-            style={styles.langBtn}
-            onClick={() => setShowHistory(!showHistory)}
-          >
-            📜
-          </button>
+          <button style={styles.langBtn} onClick={() => setShowHistory(!showHistory)}>📜</button>
           {["en", "me", "sr"].map((l) => (
-            <button
-              key={l}
-              style={{ ...styles.langBtn, ...(lang === l ? styles.langBtnActive : {}) }}
-              onClick={() => setLang(l)}
-            >
+            <button key={l} style={{ ...styles.langBtn, ...(lang === l ? styles.langBtnActive : {}) }} onClick={() => setLang(l)}>
               {l.toUpperCase()}
             </button>
           ))}
         </div>
-        <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, letterSpacing: "-0.01em" }}>
-          ✈ {t.title}
-        </h1>
+        <h1 style={{ margin: 0, fontSize: "26px", fontWeight: 800, letterSpacing: "-0.01em" }}>✈ {t.title}</h1>
         <p style={styles.headerSubtitle}>{t.subtitle}</p>
       </div>
 
-      {/* Konfiguracija aerodroma - NOVA KARTICA */}
+      {/* Airport config */}
       <div style={getCardStyle()}>
         <h2 style={getSectionTitleStyle()}>
           {t.airportConfig}
-          <button 
-            style={getBtnSecondaryStyle()}
-            onClick={saveAirportConfig}
-          >
-            💾 Sačuvaj
-          </button>
+          <button style={getBtnSecondaryStyle()} onClick={saveAirportConfig}>💾 Sačuvaj</button>
         </h2>
         <div style={styles.configRow}>
           <div style={styles.configInput}>
             <label style={getLabelStyle()}>{t.airportName}</label>
-            <input 
-              style={getInputStyle()} 
-              value={airportName} 
-              onChange={(e) => setAirportName(e.target.value)} 
-              placeholder="Tivat"
-            />
+            <input style={getInputStyle()} value={airportName} onChange={(e) => setAirportName(e.target.value)} placeholder="Tivat" />
           </div>
           <div style={styles.configInput}>
             <label style={getLabelStyle()}>{t.airportIATA}</label>
-            <input 
-              style={getInputStyle()} 
-              value={airportIATA} 
-              onChange={(e) => setAirportIATA(e.target.value.toUpperCase())} 
-              placeholder="TIV"
-              maxLength={3}
-            />
+            <input style={getInputStyle()} value={airportIATA} onChange={(e) => setAirportIATA(e.target.value.toUpperCase())} placeholder="TIV" maxLength={3} />
           </div>
           <div style={styles.configInput}>
             <label style={getLabelStyle()}>{t.airportICAO}</label>
-            <input 
-              style={getInputStyle()} 
-              value={airportICAO} 
-              onChange={(e) => setAirportICAO(e.target.value.toUpperCase())} 
-              placeholder="LYTV"
-              maxLength={4}
-            />
+            <input style={getInputStyle()} value={airportICAO} onChange={(e) => setAirportICAO(e.target.value.toUpperCase())} placeholder="LYTV" maxLength={4} />
           </div>
         </div>
         <div style={styles.configRow}>
           <div style={styles.configInput}>
             <label style={getLabelStyle()}>{t.arrivalsSubtitle}</label>
-            <input 
-              style={getInputStyle()} 
-              value={arrivalsSubtitle} 
-              onChange={(e) => setArrivalsSubtitle(e.target.value)} 
-              placeholder="Dolasci na aerodrom"
-            />
+            <input style={getInputStyle()} value={arrivalsSubtitle} onChange={(e) => setArrivalsSubtitle(e.target.value)} placeholder="Dolasci na aerodrom" />
           </div>
           <div style={styles.configInput}>
             <label style={getLabelStyle()}>{t.departuresSubtitle}</label>
-            <input 
-              style={getInputStyle()} 
-              value={departuresSubtitle} 
-              onChange={(e) => setDeparturesSubtitle(e.target.value)} 
-              placeholder="Polasci sa aerodroma"
-            />
+            <input style={getInputStyle()} value={departuresSubtitle} onChange={(e) => setDeparturesSubtitle(e.target.value)} placeholder="Polasci sa aerodroma" />
           </div>
         </div>
       </div>
 
-      {/* Sezona */}
+      {/* Season */}
       <div style={getCardStyle()}>
         <h2 style={getSectionTitleStyle()}>{t.seasonConfig}</h2>
         <label style={getLabelStyle()}>{t.seasonLabel}</label>
@@ -1271,94 +1023,36 @@ export default function Home() {
         <>
           <div style={getCardStyle()}>
             <h2 style={getSectionTitleStyle()}>{t.departures}</h2>
-            <div
-              style={getFileInputStyle(depDragOver)}
-              onDragOver={handleDepDragOver}
-              onDragLeave={handleDepDragLeave}
-              onDrop={handleDepDrop}
-              onClick={() => depFileInputRef.current?.click()}
-            >
+            <div style={getFileInputStyle(depDragOver)} onDragOver={handleDepDragOver} onDragLeave={handleDepDragLeave} onDrop={handleDepDrop} onClick={() => depFileInputRef.current?.click()}>
               📁 {depFile ? depFile.name : t.uploadCSV}
             </div>
-            <input
-              type="file"
-              accept=".csv"
-              ref={depFileInputRef}
-              style={{ display: "none" }}
-              onChange={(e) => handleDepartureFileChange(e.target.files[0])}
-            />
+            <input type="file" accept=".csv" ref={depFileInputRef} style={{ display: "none" }} onChange={(e) => handleDepartureFileChange(e.target.files[0])} />
             <p style={getTipStyle()}>Npr. S26FIDS_27MAR26-DEPARTURES.csv</p>
-            <PreviewSection 
-              data={depPreview} 
-              title={t.departures} 
-              searchTerm={depSearch}
-              setSearchTerm={setDepSearch}
-              showExport={true}
-              type="departures"
-            />
+            <PreviewSection data={depPreview} title={t.departures} searchTerm={depSearch} setSearchTerm={setDepSearch} showExport={true} type="departures" />
 
             <h2 style={{ ...getSectionTitleStyle(), marginTop: "24px" }}>{t.arrivals}</h2>
-            <div
-              style={getFileInputStyle(arrDragOver)}
-              onDragOver={handleArrDragOver}
-              onDragLeave={handleArrDragLeave}
-              onDrop={handleArrDrop}
-              onClick={() => arrFileInputRef.current?.click()}
-            >
+            <div style={getFileInputStyle(arrDragOver)} onDragOver={handleArrDragOver} onDragLeave={handleArrDragLeave} onDrop={handleArrDrop} onClick={() => arrFileInputRef.current?.click()}>
               📁 {arrFile ? arrFile.name : t.uploadCSV}
             </div>
-            <input
-              type="file"
-              accept=".csv"
-              ref={arrFileInputRef}
-              style={{ display: "none" }}
-              onChange={(e) => handleArrivalFileChange(e.target.files[0])}
-            />
+            <input type="file" accept=".csv" ref={arrFileInputRef} style={{ display: "none" }} onChange={(e) => handleArrivalFileChange(e.target.files[0])} />
             <p style={getTipStyle()}>Npr. S26FIDS_27MAR26-ARRIVALS.csv</p>
-            <PreviewSection 
-              data={arrPreview} 
-              title={t.arrivals} 
-              searchTerm={arrSearch}
-              setSearchTerm={setArrSearch}
-              showExport={true}
-              type="arrivals"
-            />
+            <PreviewSection data={arrPreview} title={t.arrivals} searchTerm={arrSearch} setSearchTerm={setArrSearch} showExport={true} type="arrivals" />
           </div>
 
           <div style={getCardStyle()}>
             <h2 style={getSectionTitleStyle()}>{t.generatePDF}</h2>
             <div style={styles.row}>
-              <button
-                style={{ ...styles.btnArrivals, ...(loading || !arrFile ? styles.btnDisabled : {}) }}
-                onClick={() => handleOldCSVGenerate("arrivals")}
-                disabled={loading || !arrFile}
-              >
+              <button style={{ ...styles.btnArrivals, ...(loading || !arrFile ? styles.btnDisabled : {}) }} onClick={() => handleOldCSVGenerate("arrivals")} disabled={loading || !arrFile}>
                 ⬇ {t.arrivals}.pdf
               </button>
-              <button
-                style={{ ...styles.btnDepartures, ...(loading || !depFile ? styles.btnDisabled : {}) }}
-                onClick={() => handleOldCSVGenerate("departures")}
-                disabled={loading || !depFile}
-              >
+              <button style={{ ...styles.btnDepartures, ...(loading || !depFile ? styles.btnDisabled : {}) }} onClick={() => handleOldCSVGenerate("departures")} disabled={loading || !depFile}>
                 ⬆ {t.departures}.pdf
               </button>
             </div>
             <div style={{ marginTop: "12px" }}>
               <button
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  background: loading || (!depFile || !arrFile) ? "#c8d8e8" : "linear-gradient(90deg,#00467f,#00b4d8)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "10px",
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  cursor: loading || (!depFile || !arrFile) ? "not-allowed" : "pointer",
-                  opacity: loading || (!depFile || !arrFile) ? 0.6 : 1
-                }}
-                onClick={handleOldCSVBoth}
-                disabled={loading || !depFile || !arrFile}
+                style={{ width: "100%", padding: "14px", background: loading || (!depFile || !arrFile) ? "#c8d8e8" : "linear-gradient(90deg,#00467f,#00b4d8)", color: "white", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: 700, cursor: loading || (!depFile || !arrFile) ? "not-allowed" : "pointer", opacity: loading || (!depFile || !arrFile) ? 0.6 : 1 }}
+                onClick={handleOldCSVBoth} disabled={loading || !depFile || !arrFile}
               >
                 {loading ? t.loading : `⬇ ${t.generateBoth}`}
               </button>
@@ -1366,14 +1060,10 @@ export default function Home() {
             {status && <div style={getStatusStyle()}>{status.msg}</div>}
             {status?.type === "ok" && currentPdfData && (
               <div style={{ marginTop: "12px" }}>
-                <button
-                  style={getBtnSecondaryStyle()}
-                  onClick={() => setShowEmailDialog(true)}
-                >
-                  📧 {t.sendEmail}
-                </button>
+                <button style={getBtnSecondaryStyle()} onClick={() => setShowEmailDialog(true)}>📧 {t.sendEmail}</button>
               </div>
             )}
+            <SummaryButton onClick={handleSummaryPDF} loading={loading} />
           </div>
         </>
       )}
@@ -1383,94 +1073,36 @@ export default function Home() {
         <>
           <div style={getCardStyle()}>
             <h2 style={getSectionTitleStyle()}>{t.departures}</h2>
-            <div
-              style={getFileInputStyle(newDepDragOver)}
-              onDragOver={handleNewDepDragOver}
-              onDragLeave={handleNewDepDragLeave}
-              onDrop={handleNewDepDrop}
-              onClick={() => newDepFileInputRef.current?.click()}
-            >
+            <div style={getFileInputStyle(newDepDragOver)} onDragOver={handleNewDepDragOver} onDragLeave={handleNewDepDragLeave} onDrop={handleNewDepDrop} onClick={() => newDepFileInputRef.current?.click()}>
               📁 {newDepFile ? newDepFile.name : t.uploadCSV}
             </div>
-            <input
-              type="file"
-              accept=".csv"
-              ref={newDepFileInputRef}
-              style={{ display: "none" }}
-              onChange={(e) => handleNewDepartureFileChange(e.target.files[0])}
-            />
+            <input type="file" accept=".csv" ref={newDepFileInputRef} style={{ display: "none" }} onChange={(e) => handleNewDepartureFileChange(e.target.files[0])} />
             <p style={getTipStyle()}>Npr. dep.csv (Oper, Type, Dep flt no., To, ETD, Period, DOW)</p>
-            <PreviewSection 
-              data={newDepPreview} 
-              title={t.departures} 
-              searchTerm={newDepSearch}
-              setSearchTerm={setNewDepSearch}
-              showExport={true}
-              type="departures_new"
-            />
+            <PreviewSection data={newDepPreview} title={t.departures} searchTerm={newDepSearch} setSearchTerm={setNewDepSearch} showExport={true} type="departures_new" />
 
             <h2 style={{ ...getSectionTitleStyle(), marginTop: "24px" }}>{t.arrivals}</h2>
-            <div
-              style={getFileInputStyle(newArrDragOver)}
-              onDragOver={handleNewArrDragOver}
-              onDragLeave={handleNewArrDragLeave}
-              onDrop={handleNewArrDrop}
-              onClick={() => newArrFileInputRef.current?.click()}
-            >
+            <div style={getFileInputStyle(newArrDragOver)} onDragOver={handleNewArrDragOver} onDragLeave={handleNewArrDragLeave} onDrop={handleNewArrDrop} onClick={() => newArrFileInputRef.current?.click()}>
               📁 {newArrFile ? newArrFile.name : t.uploadCSV}
             </div>
-            <input
-              type="file"
-              accept=".csv"
-              ref={newArrFileInputRef}
-              style={{ display: "none" }}
-              onChange={(e) => handleNewArrivalFileChange(e.target.files[0])}
-            />
+            <input type="file" accept=".csv" ref={newArrFileInputRef} style={{ display: "none" }} onChange={(e) => handleNewArrivalFileChange(e.target.files[0])} />
             <p style={getTipStyle()}>Npr. arr.csv (Oper, Type, Arr flt no., From, ETA, Period, DOW)</p>
-            <PreviewSection 
-              data={newArrPreview} 
-              title={t.arrivals} 
-              searchTerm={newArrSearch}
-              setSearchTerm={setNewArrSearch}
-              showExport={true}
-              type="arrivals_new"
-            />
+            <PreviewSection data={newArrPreview} title={t.arrivals} searchTerm={newArrSearch} setSearchTerm={setNewArrSearch} showExport={true} type="arrivals_new" />
           </div>
 
           <div style={getCardStyle()}>
             <h2 style={getSectionTitleStyle()}>{t.generatePDF}</h2>
             <div style={styles.row}>
-              <button
-                style={{ ...styles.btnArrivals, ...(loading || !newArrFile ? styles.btnDisabled : {}) }}
-                onClick={() => handleNewCSVGenerate("arrivals")}
-                disabled={loading || !newArrFile}
-              >
+              <button style={{ ...styles.btnArrivals, ...(loading || !newArrFile ? styles.btnDisabled : {}) }} onClick={() => handleNewCSVGenerate("arrivals")} disabled={loading || !newArrFile}>
                 ⬇ {t.arrivals}.pdf
               </button>
-              <button
-                style={{ ...styles.btnDepartures, ...(loading || !newDepFile ? styles.btnDisabled : {}) }}
-                onClick={() => handleNewCSVGenerate("departures")}
-                disabled={loading || !newDepFile}
-              >
+              <button style={{ ...styles.btnDepartures, ...(loading || !newDepFile ? styles.btnDisabled : {}) }} onClick={() => handleNewCSVGenerate("departures")} disabled={loading || !newDepFile}>
                 ⬆ {t.departures}.pdf
               </button>
             </div>
             <div style={{ marginTop: "12px" }}>
               <button
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  background: loading || (!newDepFile || !newArrFile) ? "#c8d8e8" : "linear-gradient(90deg,#00467f,#00b4d8)",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "10px",
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  cursor: loading || (!newDepFile || !newArrFile) ? "not-allowed" : "pointer",
-                  opacity: loading || (!newDepFile || !newArrFile) ? 0.6 : 1
-                }}
-                onClick={handleNewCSVBoth}
-                disabled={loading || !newDepFile || !newArrFile}
+                style={{ width: "100%", padding: "14px", background: loading || (!newDepFile || !newArrFile) ? "#c8d8e8" : "linear-gradient(90deg,#00467f,#00b4d8)", color: "white", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: 700, cursor: loading || (!newDepFile || !newArrFile) ? "not-allowed" : "pointer", opacity: loading || (!newDepFile || !newArrFile) ? 0.6 : 1 }}
+                onClick={handleNewCSVBoth} disabled={loading || !newDepFile || !newArrFile}
               >
                 {loading ? t.loading : `⬇ ${t.generateBoth}`}
               </button>
@@ -1478,14 +1110,10 @@ export default function Home() {
             {status && <div style={getStatusStyle()}>{status.msg}</div>}
             {status?.type === "ok" && currentPdfData && (
               <div style={{ marginTop: "12px" }}>
-                <button
-                  style={getBtnSecondaryStyle()}
-                  onClick={() => setShowEmailDialog(true)}
-                >
-                  📧 {t.sendEmail}
-                </button>
+                <button style={getBtnSecondaryStyle()} onClick={() => setShowEmailDialog(true)}>📧 {t.sendEmail}</button>
               </div>
             )}
+            <SummaryButton onClick={handleSummaryPDF} loading={loading} />
           </div>
         </>
       )}
@@ -1494,39 +1122,21 @@ export default function Home() {
       {tab === TAB_JSON && (
         <div style={getCardStyle()}>
           <h2 style={getSectionTitleStyle()}>{t.jsonFile}</h2>
-
           <label style={getLabelStyle()}>{t.departures} / {t.arrivals}</label>
           <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
             {["departures", "arrivals"].map((type) => (
-              <button
-                key={type}
-                onClick={() => setJsonDocType(type)}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontWeight: 700,
-                  fontSize: "13px",
-                  cursor: "pointer",
-                  background: jsonDocType === type ? "#0077b6" : (darkMode ? "#2a3a48" : "#e8f0fe"),
-                  color: jsonDocType === type ? "white" : (darkMode ? "#00b4d8" : "#0077b6")
-                }}
-              >
+              <button key={type} onClick={() => setJsonDocType(type)} style={{
+                flex: 1, padding: "10px", border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "13px", cursor: "pointer",
+                background: jsonDocType === type ? "#0077b6" : (darkMode ? "#2a3a48" : "#e8f0fe"),
+                color: jsonDocType === type ? "white" : (darkMode ? "#00b4d8" : "#0077b6"),
+              }}>
                 {type === "departures" ? "⬆ " + t.departures : "⬇ " + t.arrivals}
               </button>
             ))}
           </div>
-
           <label style={getLabelStyle()}>{t.uploadJSON}</label>
-          <input
-            type="file"
-            accept=".json"
-            style={getFileInputStyle(false)}
-            onChange={(e) => { setJsonFile(e.target.files[0] || null); setJsonText(""); handleJSONPreview(); }}
-          />
+          <input type="file" accept=".json" style={getFileInputStyle(false)} onChange={(e) => { setJsonFile(e.target.files[0] || null); setJsonText(""); handleJSONPreview(); }} />
           <p style={getTipStyle()}>{t.uploadJSON} — {t.orPasteJSON}</p>
-
           <label style={getLabelStyle()}>{t.orPasteJSON}</label>
           <textarea
             style={{ ...getInputStyle(), height: "180px", resize: "vertical", fontFamily: "monospace", fontSize: "12px" }}
@@ -1534,59 +1144,28 @@ export default function Home() {
             onChange={(e) => { setJsonText(e.target.value); setJsonFile(null); handleJSONPreview(); }}
             placeholder={'[\n  { "FLC": "JU", "FLN": "681", "SCT": 825, "VI1": "BEG", ... },\n  ...\n]'}
           />
-          <PreviewSection 
-            data={jsonPreview} 
-            title={jsonDocType === "departures" ? t.departures : t.arrivals}
-            searchTerm={jsonSearch}
-            setSearchTerm={setJsonSearch}
-            showExport={true}
-            type={jsonDocType}
-          />
-
+          <PreviewSection data={jsonPreview} title={jsonDocType === "departures" ? t.departures : t.arrivals} searchTerm={jsonSearch} setSearchTerm={setJsonSearch} showExport={true} type={jsonDocType} />
           <button
-            style={{
-              width: "100%",
-              padding: "14px",
-              background: loading || (!jsonText.trim() && !jsonFile) ? "#c8d8e8" : "linear-gradient(90deg,#00467f,#0077b6)",
-              color: "white",
-              border: "none",
-              borderRadius: "10px",
-              fontSize: "15px",
-              fontWeight: 700,
-              cursor: loading || (!jsonText.trim() && !jsonFile) ? "not-allowed" : "pointer",
-              opacity: loading || (!jsonText.trim() && !jsonFile) ? 0.6 : 1
-            }}
-            onClick={handleJSONGenerate}
-            disabled={loading || (!jsonText.trim() && !jsonFile)}
+            style={{ width: "100%", padding: "14px", background: loading || (!jsonText.trim() && !jsonFile) ? "#c8d8e8" : "linear-gradient(90deg,#00467f,#0077b6)", color: "white", border: "none", borderRadius: "10px", fontSize: "15px", fontWeight: 700, cursor: loading || (!jsonText.trim() && !jsonFile) ? "not-allowed" : "pointer", opacity: loading || (!jsonText.trim() && !jsonFile) ? 0.6 : 1 }}
+            onClick={handleJSONGenerate} disabled={loading || (!jsonText.trim() && !jsonFile)}
           >
             {loading ? t.loading : `🔷 ${t.generatePDF}`}
           </button>
-
           {status && <div style={getStatusStyle()}>{status.msg}</div>}
           {status?.type === "ok" && currentPdfData && (
             <div style={{ marginTop: "12px" }}>
-              <button
-                style={getBtnSecondaryStyle()}
-                onClick={() => setShowEmailDialog(true)}
-              >
-                📧 {t.sendEmail}
-              </button>
+              <button style={getBtnSecondaryStyle()} onClick={() => setShowEmailDialog(true)}>📧 {t.sendEmail}</button>
             </div>
           )}
+          <SummaryButton onClick={handleSummaryPDF} loading={loading} />
         </div>
       )}
 
-      {/* History panel */}
       <HistoryPanel />
-
-      {/* Email dialog */}
       <EmailDialog />
 
-      {/* Footer */}
       <div style={{ maxWidth: "720px", width: "100%", textAlign: "center" }}>
-        <p style={getTipStyle()}>
-          {t.disclaimer}
-        </p>
+        <p style={getTipStyle()}>{t.disclaimer}</p>
       </div>
     </div>
   );
