@@ -492,7 +492,7 @@ export default function Home() {
   const [departuresSubtitle, setDeparturesSubtitle] = useState("Polasci sa aerodroma");
 
   const [season, setSeason] = useState("S26 – Summer 2026");
-  const [period, setPeriod] = useState("30 MAR 2026 – 24 OCT 2026");
+  const [period, setPeriod] = useState("29 MAR 2026 – 25 OCT 2026");
 
   const [tab, setTab] = useState(TAB_CSV);
 
