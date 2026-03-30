@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import { parseTimetableCSV, parseTimetableJSON } from "../lib/csvParser";
 import { parseArrivalsNewCSV, parseDeparturesNewCSV } from "../lib/csvParserNew";
 import { generateTimetablePDF, generateSummaryPDF, downloadPDF } from "../lib/pdfGenerator";
+import StatisticsDashboard from "../components/StatisticsDashboard";
+import QRCodeGenerator from "../components/QRCodeGenerator";
 
 // ── Stil konstante ────────────────────────────────────────────────────────────
 const styles = {
@@ -242,6 +244,15 @@ const styles = {
     maxWidth: "400px",
     width: "90%",
   },
+  modalLarge: {
+    background: "white",
+    borderRadius: "16px",
+    padding: "32px",
+    maxWidth: "900px",
+    width: "90%",
+    maxHeight: "80vh",
+    overflow: "auto",
+  },
   configRow: {
     display: "flex",
     gap: "12px",
@@ -312,6 +323,9 @@ const darkStyles = {
   modalContent: {
     background: "#1e2a36",
   },
+  modalLarge: {
+    background: "#1e2a36",
+  },
 };
 
 const TAB_CSV = "csv";
@@ -362,6 +376,8 @@ const translations = {
     cancel: "Cancel",
     more: "more",
     destinations_count: "destinations",
+    statistics: "Statistics",
+    showStats: "Show Statistics",
   },
   me: {
     title: "Aerodrom",
@@ -406,6 +422,8 @@ const translations = {
     cancel: "Odustani",
     more: "više",
     destinations_count: "destinacija",
+    statistics: "Statistika",
+    showStats: "Prikaži statistiku",
   },
   sr: {
     title: "Aerodrom",
@@ -450,6 +468,8 @@ const translations = {
     cancel: "Odustani",
     more: "više",
     destinations_count: "destinacija",
+    statistics: "Statistika",
+    showStats: "Prikaži statistiku",
   },
 };
 
@@ -474,6 +494,32 @@ function SummaryButton({ onClick, loading }) {
         disabled={loading}
       >
         🗂 Generiši Summary PDF
+      </button>
+    </div>
+  );
+}
+
+// ── Statistika dugme komponenta ──────────────────────────────────────────────
+function StatsButton({ onClick, loading, disabled }) {
+  return (
+    <div style={{ marginTop: "8px" }}>
+      <button
+        style={{
+          width: "100%",
+          padding: "14px",
+          background: "linear-gradient(90deg, #6b5b95, #8a7ab3)",
+          color: "white",
+          border: "none",
+          borderRadius: "10px",
+          fontSize: "15px",
+          fontWeight: 700,
+          cursor: disabled || loading ? "not-allowed" : "pointer",
+          opacity: disabled || loading ? 0.6 : 1,
+        }}
+        onClick={onClick}
+        disabled={disabled || loading}
+      >
+        📊 Prikaži statistiku
       </button>
     </div>
   );
@@ -525,6 +571,10 @@ export default function Home() {
 
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // State za statistiku
+  const [showStats, setShowStats] = useState(false);
+  const [statsData, setStatsData] = useState([]);
 
   const [depDragOver, setDepDragOver] = useState(false);
   const [arrDragOver, setArrDragOver] = useState(false);
@@ -796,6 +846,29 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
+  // ── Statistika handler ───────────────────────────────────────────────────────
+
+  const handleShowStats = () => {
+    const allData = [];
+    if (tab === TAB_CSV) {
+      if (depPreview) allData.push(depPreview);
+      if (arrPreview) allData.push(arrPreview);
+    } else if (tab === TAB_NEW_CSV) {
+      if (newDepPreview) allData.push(newDepPreview);
+      if (newArrPreview) allData.push(newArrPreview);
+    } else if (tab === TAB_JSON) {
+      if (jsonPreview) allData.push(jsonPreview);
+    }
+    
+    if (allData.length === 0) {
+      setStatus({ type: "err", msg: "Učitajte fajl za prikaz statistike" });
+      return;
+    }
+    
+    setStatsData(allData);
+    setShowStats(true);
+  };
+
   // ── Email handler ────────────────────────────────────────────────────────────
 
   const sendEmail = async () => {
@@ -838,6 +911,7 @@ export default function Home() {
   const getPreviewItemStyle = () => ({ ...styles.previewItem, ...(darkMode ? darkStyles.previewItem : {}) });
   const getBtnSecondaryStyle = () => ({ ...styles.btnSecondary, ...(darkMode ? darkStyles.btnSecondary : {}) });
   const getModalContentStyle = () => ({ ...styles.modalContent, ...(darkMode ? darkStyles.modalContent : {}) });
+  const getModalLargeStyle = () => ({ ...styles.modalLarge, ...(darkMode ? darkStyles.modalLarge : {}) });
 
   const getStatusStyle = () => {
     const base = { ...styles.status, ...(darkMode ? darkStyles.status : {}) };
@@ -932,6 +1006,25 @@ export default function Home() {
             <button style={getBtnSecondaryStyle()} onClick={() => setShowEmailDialog(false)}>{t.cancel}</button>
             <button style={{ ...styles.btnArrivals, margin: 0 }} onClick={sendEmail}>{t.send}</button>
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modal za statistiku
+  const StatsModal = () => {
+    if (!showStats) return null;
+    return (
+      <div style={styles.modal} onClick={() => setShowStats(false)}>
+        <div 
+          style={getModalLargeStyle()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <h2 style={getSectionTitleStyle()}>📊 {t.statistics}</h2>
+            <button style={getBtnSecondaryStyle()} onClick={() => setShowStats(false)}>✕ {t.close}</button>
+          </div>
+          <StatisticsDashboard data={statsData} darkMode={darkMode} t={t} />
         </div>
       </div>
     );
@@ -1059,11 +1152,17 @@ export default function Home() {
             </div>
             {status && <div style={getStatusStyle()}>{status.msg}</div>}
             {status?.type === "ok" && currentPdfData && (
-              <div style={{ marginTop: "12px" }}>
+              <div style={{ marginTop: "12px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
                 <button style={getBtnSecondaryStyle()} onClick={() => setShowEmailDialog(true)}>📧 {t.sendEmail}</button>
+                <QRCodeGenerator pdfData={currentPdfData} filename={currentPdfData.filename} darkMode={darkMode} />
               </div>
             )}
             <SummaryButton onClick={handleSummaryPDF} loading={loading} />
+            <StatsButton 
+              onClick={handleShowStats} 
+              loading={loading} 
+              disabled={!depPreview && !arrPreview} 
+            />
           </div>
         </>
       )}
@@ -1109,11 +1208,17 @@ export default function Home() {
             </div>
             {status && <div style={getStatusStyle()}>{status.msg}</div>}
             {status?.type === "ok" && currentPdfData && (
-              <div style={{ marginTop: "12px" }}>
+              <div style={{ marginTop: "12px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
                 <button style={getBtnSecondaryStyle()} onClick={() => setShowEmailDialog(true)}>📧 {t.sendEmail}</button>
+                <QRCodeGenerator pdfData={currentPdfData} filename={currentPdfData.filename} darkMode={darkMode} />
               </div>
             )}
             <SummaryButton onClick={handleSummaryPDF} loading={loading} />
+            <StatsButton 
+              onClick={handleShowStats} 
+              loading={loading} 
+              disabled={!newDepPreview && !newArrPreview} 
+            />
           </div>
         </>
       )}
@@ -1153,16 +1258,23 @@ export default function Home() {
           </button>
           {status && <div style={getStatusStyle()}>{status.msg}</div>}
           {status?.type === "ok" && currentPdfData && (
-            <div style={{ marginTop: "12px" }}>
+            <div style={{ marginTop: "12px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
               <button style={getBtnSecondaryStyle()} onClick={() => setShowEmailDialog(true)}>📧 {t.sendEmail}</button>
+              <QRCodeGenerator pdfData={currentPdfData} filename={currentPdfData.filename} darkMode={darkMode} />
             </div>
           )}
           <SummaryButton onClick={handleSummaryPDF} loading={loading} />
+          <StatsButton 
+            onClick={handleShowStats} 
+            loading={loading} 
+            disabled={!jsonPreview} 
+          />
         </div>
       )}
 
       <HistoryPanel />
       <EmailDialog />
+      <StatsModal />
 
       <div style={{ maxWidth: "720px", width: "100%", textAlign: "center" }}>
         <p style={getTipStyle()}>{t.disclaimer}</p>
